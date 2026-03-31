@@ -80,6 +80,13 @@ void view_destroy(struct sway_view *view) {
 	wl_list_remove(&view->events.unmap.listener_list);
 	list_free(view->executed_criteria);
 
+	if (view->xdg_toplevel_icon) {
+		wlr_xdg_toplevel_icon_v1_unref(view->xdg_toplevel_icon);
+		view->xdg_toplevel_icon = NULL;
+	}
+	free(view->xdg_toplevel_icon_name);
+	view->xdg_toplevel_icon_name = NULL;
+
 	view_assign_ctx(view, NULL);
 	wlr_scene_node_destroy(&view->scene_tree->node);
 	if (view->impl->destroy) {

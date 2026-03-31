@@ -7,11 +7,13 @@
 #include <wlr/types/wlr_linux_dmabuf_v1.h>
 #include <wlr/types/wlr_output_layout.h>
 #include <wlr/types/wlr_subcompositor.h>
+#include <wlr/types/wlr_xdg_toplevel_icon_v1.h>
 #include "linux-dmabuf-unstable-v1-protocol.h"
 #include "sway/config.h"
 #include "sway/desktop/transaction.h"
 #include "sway/input/input-manager.h"
 #include "sway/input/seat.h"
+#include "sway/icon_fallback.h"
 #include "sway/ipc-server.h"
 #include "sway/scene_descriptor.h"
 #include "sway/sway_text_node.h"
@@ -119,6 +121,11 @@ struct sway_container *container_create(struct sway_view *view) {
 
 	c->title_bar.border = alloc_rect_node(c->title_bar.tree, &failed);
 	c->title_bar.background = alloc_rect_node(c->title_bar.tree, &failed);
+	c->title_bar.icon = wlr_scene_buffer_create(c->title_bar.tree, NULL);
+	if (!c->title_bar.icon) {
+		sway_log(SWAY_ERROR, "Failed to allocate titlebar icon scene buffer");
+		failed = true;
+	}
 
 	if (view) {
 		// only containers with views can have borders
@@ -363,6 +370,82 @@ void container_arrange_title_bar(struct sway_container *con) {
 	int height = container_titlebar_height();
 
 	struct wlr_box text_box = { 0, 0, 0, 0 };
+	int left_reserved_width = 0;
+	int right_reserved_width = 0;
+
+	if (con->view && con->title_bar.icon) {
+		struct wlr_buffer *icon_buffer = NULL;
+		int base_icon_height = MAX(1, height - 2 * config->titlebar_v_padding);
+		int icon_height = (int)(base_icon_height * config->titlebar_icon_scale);
+		icon_height = MAX(1, MIN(icon_height, height));
+		struct wlr_xdg_toplevel_icon_v1 *icon = con->view->xdg_toplevel_icon;
+		struct wlr_xdg_toplevel_icon_v1_buffer *best = NULL;
+		if (icon) {
+			int best_delta = INT32_MAX;
+			struct wlr_xdg_toplevel_icon_v1_buffer *candidate;
+			wl_list_for_each(candidate, &icon->buffers, link) {
+				if (!candidate->buffer || candidate->buffer->height <= 0 ||
+						candidate->buffer->width <= 0) {
+					continue;
+				}
+				int delta = abs(candidate->buffer->height - icon_height);
+				if (delta < best_delta) {
+					best = candidate;
+					best_delta = delta;
+				}
+			}
+		}
+
+		if (best && best->buffer) {
+			icon_buffer = best->buffer;
+		} else if (con->view->xdg_toplevel_icon_name &&
+				con->view->xdg_toplevel_icon_name[0] != '\0') {
+			const char *icon_name = con->view->xdg_toplevel_icon_name;
+			bool needs_reload = !con->title_bar.icon_fallback_name ||
+				strcmp(con->title_bar.icon_fallback_name, icon_name) != 0 ||
+				con->title_bar.icon_fallback_buffer == NULL;
+			if (needs_reload) {
+				if (con->title_bar.icon_fallback_buffer) {
+					wlr_buffer_drop(con->title_bar.icon_fallback_buffer);
+					con->title_bar.icon_fallback_buffer = NULL;
+				}
+				free(con->title_bar.icon_fallback_name);
+				con->title_bar.icon_fallback_name = strdup(icon_name);
+				if (con->title_bar.icon_fallback_name) {
+					con->title_bar.icon_fallback_buffer =
+						icon_fallback_load_buffer(icon_name, icon_height);
+				}
+			}
+			icon_buffer = con->title_bar.icon_fallback_buffer;
+		}
+
+		if (icon_buffer && icon_buffer->height > 0 && icon_buffer->width > 0) {
+			int icon_width = (icon_buffer->width * icon_height) / MAX(icon_buffer->height, 1);
+			icon_width = MAX(1, icon_width);
+			int icon_gap = MAX(0, config->titlebar_icon_padding);
+			int icon_x = config->titlebar_h_padding + icon_gap;
+			if (config->titlebar_icon_position == ALIGN_RIGHT) {
+				icon_x = width - config->titlebar_h_padding - icon_gap - icon_width;
+			}
+			icon_x = MAX(0, icon_x);
+
+			wlr_scene_buffer_set_buffer(con->title_bar.icon, icon_buffer);
+			wlr_scene_buffer_set_dest_size(con->title_bar.icon, icon_width, icon_height);
+			wlr_scene_node_set_position(&con->title_bar.icon->node,
+				icon_x, (height - icon_height) / 2);
+			wlr_scene_node_set_enabled(&con->title_bar.icon->node, true);
+
+			int icon_reserved_width = icon_width + icon_gap * 2;
+			if (config->titlebar_icon_position == ALIGN_RIGHT) {
+				right_reserved_width = icon_reserved_width;
+			} else {
+				left_reserved_width = icon_reserved_width;
+			}
+		} else {
+			wlr_scene_buffer_set_buffer(con->title_bar.icon, NULL);
+			wlr_scene_node_set_enabled(&con->title_bar.icon->node, false);
+		}
+	}
 
 	if (con->title_bar.marks_text) {
 		struct sway_text_node *node = con->title_bar.marks_text;
@@ -370,15 +453,15 @@ void container_arrange_title_bar(struct sway_container *con) {
 
 		int h_padding;
 		if (title_align == ALIGN_RIGHT) {
-			h_padding = config->titlebar_h_padding;
+			h_padding = config->titlebar_h_padding + left_reserved_width;
 		} else {
-			h_padding = width - config->titlebar_h_padding - marks_buffer_width;
+			h_padding = width - config->titlebar_h_padding - right_reserved_width - marks_buffer_width;
 		}
 
-		h_padding = MAX(h_padding, config->titlebar_h_padding);
+		h_padding = MAX(h_padding, config->titlebar_h_padding + left_reserved_width);
 
 		int alloc_width = MIN((int)node->width,
-			width - h_padding - config->titlebar_h_padding);
+			width - h_padding - config->titlebar_h_padding - right_reserved_width);
 		alloc_width = MAX(alloc_width, 0);
 
 		sway_text_node_set_max_width(node, alloc_width);
@@ -396,17 +479,18 @@ void container_arrange_title_bar(struct sway_container *con) {
 
 		int h_padding;
 		if (title_align == ALIGN_RIGHT) {
-			h_padding = width - config->titlebar_h_padding - node->width;
+			h_padding = width - config->titlebar_h_padding - right_reserved_width - node->width;
 		} else if (title_align == ALIGN_CENTER) {
-			h_padding = ((int)width - marks_buffer_width - node->width) >> 1;
+			h_padding = ((int)width - marks_buffer_width - left_reserved_width - right_reserved_width - node->width) >> 1;
+			h_padding += left_reserved_width;
 		} else {
-			h_padding = config->titlebar_h_padding;
+			h_padding = config->titlebar_h_padding + left_reserved_width;
 		}
 
-		h_padding = MAX(h_padding, config->titlebar_h_padding);
+		h_padding = MAX(h_padding, config->titlebar_h_padding + left_reserved_width);
 
 		int alloc_width = MIN((int) node->width,
-			width - h_padding - config->titlebar_h_padding);
+			width - h_padding - config->titlebar_h_padding - right_reserved_width);
 		alloc_width = MAX(alloc_width, 0);
 
 		sway_text_node_set_max_width(node, alloc_width);
@@ -579,6 +663,13 @@ void container_destroy(struct sway_container *con) {
 			view_destroy(con->view);
 		}
 	}
+
+	if (con->title_bar.icon_fallback_buffer) {
+		wlr_buffer_drop(con->title_bar.icon_fallback_buffer);
+		con->title_bar.icon_fallback_buffer = NULL;
+	}
+	free(con->title_bar.icon_fallback_name);
+	con->title_bar.icon_fallback_name = NULL;
 
 	scene_node_disown_children(con->content_tree);
 	wlr_scene_node_destroy(&con->scene_tree->node);

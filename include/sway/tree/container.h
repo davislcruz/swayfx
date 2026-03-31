@@ -80,6 +80,9 @@ struct sway_container {
 
 		struct sway_text_node *title_text;
 		struct sway_text_node *marks_text;
+		struct wlr_scene_buffer *icon;
+		struct wlr_buffer *icon_fallback_buffer;
+		char *icon_fallback_name;
 	} title_bar;
 
 	struct {

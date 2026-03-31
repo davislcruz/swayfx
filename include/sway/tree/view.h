@@ -5,6 +5,7 @@
 #include <wlr/config.h>
 #include <wlr/types/wlr_compositor.h>
 #include <wlr/types/wlr_tearing_control_v1.h>
+#include <wlr/types/wlr_xdg_toplevel_icon_v1.h>
 #include "sway/config.h"
 #if WLR_HAS_XWAYLAND
 #include <wlr/xwayland.h>
@@ -91,6 +92,9 @@ struct sway_view {
 	struct wlr_box geometry;
 
 	struct wlr_ext_foreign_toplevel_handle_v1 *ext_foreign_toplevel;
+
+	struct wlr_xdg_toplevel_icon_v1 *xdg_toplevel_icon;
+	char *xdg_toplevel_icon_name;
 
 	struct wlr_foreign_toplevel_handle_v1 *foreign_toplevel;
 	struct wl_listener foreign_activate_request;
