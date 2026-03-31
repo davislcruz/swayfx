@@ -122,6 +122,9 @@ struct sway_server {
 	struct wl_listener tearing_control_new_object;
 	struct wl_list tearing_controllers; // sway_tearing_controller::link
 
+	struct wlr_xdg_toplevel_icon_manager_v1 *xdg_toplevel_icon_manager_v1;
+	struct wl_listener xdg_toplevel_icon_manager_v1_set_icon;
+
 	struct wl_list pending_launcher_ctxs; // launcher_ctx::link
 
 	// The timeout for transactions, after which a transaction is applied
@@ -188,5 +191,7 @@ void xdg_activation_v1_handle_new_token(struct wl_listener *listener,
 void set_rr_scheduling(void);
 
 void handle_new_tearing_hint(struct wl_listener *listener, void *data);
+
+void handle_xdg_toplevel_icon_v1_set_icon(struct wl_listener *listener, void *data);
 
 #endif

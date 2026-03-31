@@ -6,6 +6,7 @@ sway_sources = files(
 	'decoration.c',
 	'ipc-json.c',
 	'ipc-server.c',
+	'icon_fallback.c',
 	'layer_criteria.c',
 	'lock.c',
 	'main.c',
@@ -23,6 +24,7 @@ sway_sources = files(
 	'desktop/tearing.c',
 	'desktop/transaction.c',
 	'desktop/xdg_shell.c',
+	'desktop/xdg_toplevel_icon.c',
 	'desktop/launcher.c',
 
 	'input/input-manager.c',
@@ -141,6 +143,9 @@ sway_sources = files(
 	'commands/title_align.c',
 	'commands/title_format.c',
 	'commands/titlebar_border_thickness.c',
+	'commands/titlebar_icon_padding.c',
+	'commands/titlebar_icon_position.c',
+	'commands/titlebar_icon_scale.c',
 	'commands/titlebar_padding.c',
 	'commands/titlebar_separator.c',
 	'commands/unmark.c',
@@ -262,6 +267,10 @@ sway_deps = [
 	xcb_icccm,
 ]
 
+if gdk_pixbuf.found()
+	sway_deps += gdk_pixbuf
+endif
+
 if wlroots_features['xwayland']
 	sway_sources += 'desktop/xwayland.c'
 endif
@@ -276,5 +285,6 @@ executable(
 	include_directories: [sway_inc],
 	dependencies: sway_deps,
 	link_with: [lib_sway_common],
-	install: true
+	install: true,
+	install_rpath: prefix_lib_rpath
 )

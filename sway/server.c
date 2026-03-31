@@ -48,6 +48,7 @@
 #include <wlr/types/wlr_xdg_foreign_v1.h>
 #include <wlr/types/wlr_xdg_foreign_v2.h>
 #include <wlr/types/wlr_xdg_output_v1.h>
+#include <wlr/types/wlr_xdg_toplevel_icon_v1.h>
 #include <xf86drm.h>
 #include "config.h"
 #include "list.h"
@@ -418,6 +419,13 @@ bool server_init(struct sway_server *server) {
 	wl_signal_add(&server->xdg_activation_v1->events.new_token,
 		&server->xdg_activation_v1_new_token);
 
+	server->xdg_toplevel_icon_manager_v1 =
+		wlr_xdg_toplevel_icon_manager_v1_create(server->wl_display, 1);
+	server->xdg_toplevel_icon_manager_v1_set_icon.notify =
+		handle_xdg_toplevel_icon_v1_set_icon;
+	wl_signal_add(&server->xdg_toplevel_icon_manager_v1->events.set_icon,
+		&server->xdg_toplevel_icon_manager_v1_set_icon);
+
 	struct wlr_cursor_shape_manager_v1 *cursor_shape_manager =
 		wlr_cursor_shape_manager_v1_create(server->wl_display, 1);
 	server->request_set_cursor_shape.notify = handle_request_set_cursor_shape;
@@ -491,6 +499,7 @@ void server_fini(struct sway_server *server) {
 	wl_list_remove(&server->xdg_activation_v1_request_activate.link);
 	wl_list_remove(&server->xdg_activation_v1_new_token.link);
 	wl_list_remove(&server->request_set_cursor_shape.link);
+	wl_list_remove(&server->xdg_toplevel_icon_manager_v1_set_icon.link);
 	input_manager_finish(server->input);
 
 	// TODO: free sway-specific resources

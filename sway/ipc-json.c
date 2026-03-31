@@ -660,6 +660,19 @@ static void ipc_json_describe_view(struct sway_container *c, json_object *object
 	json_object_object_add(object, "app_id",
 			app_id ? json_object_new_string(app_id) : NULL);
 
+	json_object *xdg_toplevel_icon = json_object_new_object();
+	const char *icon_name = c->title_bar.icon_fallback_name;
+	json_object_object_add(xdg_toplevel_icon, "name",
+		icon_name ? json_object_new_string(icon_name) : NULL);
+	json_object_object_add(xdg_toplevel_icon, "buffer_count",
+		json_object_new_int(0));
+	json_object_object_add(xdg_toplevel_icon, "fallback_name",
+		c->title_bar.icon_fallback_name
+			? json_object_new_string(c->title_bar.icon_fallback_name)
+			: NULL);
+	json_object_object_add(xdg_toplevel_icon, "fallback_loaded",
+		json_object_new_boolean(c->title_bar.icon_fallback_buffer != NULL));
+	json_object_object_add(object, "xdg_toplevel_icon", xdg_toplevel_icon);
 	json_object_object_add(object, "foreign_toplevel_identifier",
 		c->view->ext_foreign_toplevel ?
 			json_object_new_string(c->view->ext_foreign_toplevel->identifier) : NULL);
